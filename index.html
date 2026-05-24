@@ -1,0 +1,1318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#001830">
+<title>7-day Wind Forecast at Cherry Beach</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    /* TWC brand palette — deep navy base, bright blue primary, brand red, white wave */
+    --bg: #001830;
+    --bg-elev: #002454;        /* logo navy */
+    --bg-card: #003366;
+    --border: #003a6e;
+    --border-strong: #00528f;
+    --text: #fcfcfc;           /* logo white */
+    --text-dim: #8aa6cf;
+    --text-faint: #5a7a9e;
+    --blue: #006cd8;           /* logo bright blue - primary accent */
+    --blue-glow: rgba(0, 108, 216, 0.18);
+    --red: #e63946;            /* logo red, slightly softened for dark-bg legibility */
+    --white: #fcfcfc;
+    --gold: #ffc857;
+    --teal: #43c6ac;
+    --shadow: 0 1px 0 rgba(255,255,255,0.04) inset, 0 4px 12px rgba(0,0,0,0.4);
+    /* Model colors — brand-driven, tuned for dark-bg contrast */
+    --m-hrdps: #4db8ff;        /* bright sky blue — still brand-family, but legible on navy */
+    --m-ecmwf: #e63946;        /* brand red — global gold-standard, demands attention */
+    --m-gfs:   #fcfcfc;        /* white — clean reference */
+    --m-icon:  #43c6ac;        /* teal — complementary */
+    --m-gem:   #ffc857;        /* gold — complementary */
+    /* Wind-speed semantic colors (also brand-aligned) */
+    --w-light: #8aa6cf;
+    --w-good:  #006cd8;
+    --w-strong:#ffc857;
+    --w-extreme:#e63946;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+  html, body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 15px;
+    line-height: 1.4;
+    overscroll-behavior: none;
+    min-height: 100vh;
+  }
+
+  body {
+    background:
+      radial-gradient(ellipse 80% 50% at 50% -10%, rgba(0, 108, 216, 0.12), transparent),
+      var(--bg);
+    padding-bottom: 40px;
+  }
+
+  /* Header */
+  header {
+    padding: 18px 16px 14px;
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    background: rgba(0, 24, 48, 0.92);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    z-index: 100;
+  }
+  .title-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+    min-width: 0;
+  }
+  .brand .logo {
+    height: 44px;
+    width: auto;
+    flex-shrink: 0;
+  }
+  .brand-text {
+    min-width: 0;
+  }
+  h1 {
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    line-height: 1.2;
+    color: var(--text);
+  }
+  h1 .accent { color: var(--blue); }
+  .subtitle {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--text-faint);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-top: 2px;
+  }
+  .status {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 0.05em;
+    text-align: right;
+  }
+  .status .dot {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--teal);
+    margin-right: 4px;
+    box-shadow: 0 0 8px var(--teal);
+    animation: pulse 2s ease-in-out infinite;
+  }
+  .status.error .dot { background: var(--red); box-shadow: 0 0 8px var(--red); }
+  @keyframes pulse { 50% { opacity: 0.4; } }
+
+  /* Model selector chips */
+  .models-row {
+    display: flex;
+    gap: 6px;
+    margin-top: 12px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    padding-bottom: 2px;
+  }
+  .models-row::-webkit-scrollbar { display: none; }
+  .model-chip {
+    flex: 0 0 auto;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 500;
+    padding: 6px 10px;
+    border-radius: 4px;
+    border: 1px solid var(--border-strong);
+    background: var(--bg-elev);
+    color: var(--text-dim);
+    cursor: pointer;
+    transition: all 0.15s;
+    letter-spacing: 0.03em;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .model-chip .swatch {
+    width: 8px;
+    height: 8px;
+    border-radius: 2px;
+    background: var(--c, var(--text-dim));
+    opacity: 0.4;
+    transition: opacity 0.15s;
+  }
+  .model-chip.active {
+    background: var(--bg-card);
+    color: var(--text);
+    border-color: var(--c, var(--blue));
+  }
+  .model-chip.active .swatch { opacity: 1; box-shadow: 0 0 8px var(--c); }
+
+  /* Day tabs */
+  .days-row {
+    display: flex;
+    gap: 0;
+    margin-top: 12px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+    background: var(--bg-elev);
+  }
+  .day-tab {
+    flex: 1;
+    padding: 8px 4px;
+    text-align: center;
+    cursor: pointer;
+    background: transparent;
+    border: none;
+    color: var(--text-dim);
+    border-right: 1px solid var(--border);
+    transition: all 0.15s;
+    font-family: inherit;
+  }
+  .day-tab:last-child { border-right: none; }
+  .day-tab .dow {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .day-tab .dom {
+    font-size: 16px;
+    font-weight: 700;
+    margin-top: 2px;
+    color: var(--text);
+  }
+  .day-tab.active {
+    background: var(--bg-card);
+    color: var(--blue);
+  }
+  .day-tab.active .dom { color: var(--blue); }
+  .day-tab.today .dow { color: var(--gold); }
+
+  /* Main content */
+  main { padding: 16px; }
+
+  /* Summary band */
+  .summary {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+    margin-bottom: 16px;
+  }
+  .summary-cell {
+    background: var(--bg-elev);
+    padding: 10px 8px;
+    text-align: center;
+  }
+  .summary-cell .label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    color: var(--text-faint);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .summary-cell .value {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--blue);
+    margin-top: 2px;
+    line-height: 1;
+  }
+  .summary-cell .unit {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--text-dim);
+    margin-left: 2px;
+  }
+
+  /* Hourly rows */
+  .hourly-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+    background: var(--bg-elev);
+  }
+  .hour-row {
+    display: grid;
+    grid-template-columns: 52px 1fr;
+    gap: 0;
+    border-bottom: 1px solid var(--border);
+    position: relative;
+  }
+  .hour-row:last-child { border-bottom: none; }
+  .hour-row.now { background: linear-gradient(90deg, rgba(255,184,77,0.08), transparent); }
+  .hour-row.now::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: var(--gold);
+  }
+  .hour-row.sailable { background: linear-gradient(90deg, rgba(77,208,225,0.04), transparent); }
+
+  .hour-time {
+    padding: 10px 8px;
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0,0,0,0.15);
+  }
+  .hour-time .hh {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text);
+    letter-spacing: -0.02em;
+  }
+  .hour-time .ampm {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    color: var(--text-faint);
+    letter-spacing: 0.05em;
+    margin-top: 1px;
+  }
+  .hour-row.now .hour-time .hh { color: var(--gold); }
+
+  .models-stack {
+    display: flex;
+    flex-direction: column;
+  }
+  .model-row {
+    display: grid;
+    grid-template-columns: 36px 60px 28px 1fr;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 8px;
+    border-bottom: 1px dashed var(--border);
+    min-height: 32px;
+  }
+  .model-row:last-child { border-bottom: none; }
+
+  .model-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    color: var(--c, var(--text-dim));
+  }
+
+  .model-speeds {
+    display: flex;
+    align-items: baseline;
+    gap: 3px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .model-speeds .wind {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1;
+  }
+  .model-speeds .gust {
+    font-size: 10px;
+    color: var(--text-dim);
+  }
+  .model-speeds .gust::before { content: 'G'; opacity: 0.5; margin-right: 1px; }
+
+  .model-arrow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .model-arrow svg {
+    width: 24px;
+    height: 24px;
+    display: block;
+  }
+
+  /* Bar visualization */
+  .bar-track {
+    height: 6px;
+    background: rgba(255,255,255,0.04);
+    border-radius: 2px;
+    position: relative;
+    overflow: hidden;
+  }
+  .bar-fill {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    background: var(--c, var(--blue));
+    border-radius: 2px;
+    transition: width 0.3s;
+  }
+  .bar-gust {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background: var(--text);
+    opacity: 0.6;
+  }
+  .no-data { color: var(--text-faint); font-size: 10px; font-style: italic; }
+
+  /* Legend / footer */
+  .legend {
+    margin-top: 16px;
+    padding: 12px;
+    background: var(--bg-elev);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 11px;
+    color: var(--text-dim);
+    line-height: 1.5;
+  }
+  .legend strong { color: var(--blue); font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.05em; }
+  .legend .row { margin-top: 6px; }
+  .legend code { font-family: 'JetBrains Mono', monospace; color: var(--gold); font-size: 10px; }
+
+  /* Wind scale colors based on speed */
+  .speed-light { color: var(--text-dim) !important; }
+  .speed-good { color: var(--blue) !important; }
+  .speed-strong { color: var(--gold) !important; }
+  .speed-extreme { color: var(--red) !important; }
+
+  /* View toggle */
+  .view-toggle {
+    display: flex;
+    margin-top: 12px;
+    background: var(--bg-elev);
+    border: 1px solid var(--border-strong);
+    border-radius: 6px;
+    padding: 2px;
+    gap: 2px;
+  }
+  .view-btn {
+    flex: 1;
+    padding: 7px 8px;
+    background: transparent;
+    border: none;
+    color: var(--text-dim);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+  }
+  .view-btn.active {
+    background: var(--bg-card);
+    color: var(--blue);
+    box-shadow: 0 1px 0 rgba(255,255,255,0.04) inset;
+  }
+  .view-btn svg { width: 14px; height: 14px; }
+
+  /* Chart view */
+  .chart-wrap {
+    background: var(--bg-elev);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+    margin-bottom: 12px;
+  }
+  .chart-scroll {
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-strong) transparent;
+  }
+  .chart-scroll::-webkit-scrollbar { height: 6px; }
+  .chart-scroll::-webkit-scrollbar-track { background: transparent; }
+  .chart-scroll::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 3px; }
+
+  .chart-svg { display: block; }
+  .chart-svg .grid-line { stroke: var(--border); stroke-width: 1; }
+  .chart-svg .grid-line-strong { stroke: var(--border-strong); stroke-width: 1; }
+  .chart-svg .day-divider { stroke: var(--border-strong); stroke-width: 1; stroke-dasharray: 2,3; }
+  .chart-svg .axis-label { fill: var(--text-faint); font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: 0.05em; }
+  .chart-svg .day-label { fill: var(--text-dim); font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 700; letter-spacing: 0.08em; }
+  .chart-svg .hour-label { fill: var(--text-faint); font-family: 'JetBrains Mono', monospace; font-size: 9px; }
+  .chart-svg .now-line { stroke: var(--gold); stroke-width: 1.5; }
+  .chart-svg .now-label { fill: var(--gold); font-family: 'JetBrains Mono', monospace; font-size: 9px; font-weight: 700; letter-spacing: 0.08em; }
+  .chart-svg .threshold-line {
+    stroke: var(--blue);
+    stroke-width: 1.5;
+    stroke-dasharray: 5,3;
+    opacity: 0.85;
+  }
+  .chart-svg .threshold-tag-bg {
+    fill: var(--blue);
+    opacity: 0.95;
+  }
+  .chart-svg .threshold-tag {
+    fill: #ffffff;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+  }
+  .chart-svg .wind-line { fill: none; stroke-width: 1.75; stroke-linejoin: round; stroke-linecap: round; }
+  .chart-svg .gust-line { fill: none; stroke-width: 1.25; stroke-dasharray: 3,3; stroke-linejoin: round; }
+  .chart-svg .band-light { fill: rgba(138, 166, 207, 0.04); }
+  .chart-svg .band-good { fill: rgba(0, 108, 216, 0.10); }
+  .chart-svg .band-strong { fill: rgba(255, 200, 87, 0.06); }
+  .chart-svg .band-extreme { fill: rgba(230, 57, 70, 0.07); }
+  .chart-svg .band-label { fill: var(--text-faint); font-family: 'JetBrains Mono', monospace; font-size: 8px; letter-spacing: 0.1em; opacity: 0.7; }
+
+  /* Direction arrow strip (above chart) */
+  .dir-strip-bg { fill: rgba(0,0,0,0.2); stroke: var(--border); stroke-width: 1; }
+  .dir-arrow { stroke-width: 1.25; stroke-linecap: round; }
+  .dir-arrow-head { stroke-width: 0; }
+
+  /* Chart legend */
+  .chart-legend {
+    padding: 8px 12px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    background: rgba(0,0,0,0.15);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    color: var(--text-dim);
+    letter-spacing: 0.05em;
+  }
+  .chart-legend .item { display: flex; align-items: center; gap: 5px; }
+  .chart-legend .line-sample {
+    width: 18px;
+    height: 2px;
+    background: var(--c);
+    border-radius: 1px;
+  }
+  .chart-legend .line-sample.dashed {
+    background: repeating-linear-gradient(90deg, var(--c) 0 3px, transparent 3px 6px);
+    height: 1.5px;
+  }
+  .chart-hint {
+    padding: 6px 12px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    color: var(--text-faint);
+    letter-spacing: 0.05em;
+    text-align: center;
+    border-top: 1px solid var(--border);
+    background: rgba(0,0,0,0.1);
+  }
+
+  .hidden { display: none !important; }
+
+  /* Loader */
+  .loader {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 60px 20px;
+    color: var(--text-dim);
+  }
+  .loader-spin {
+    width: 32px;
+    height: 32px;
+    border: 2px solid var(--border);
+    border-top-color: var(--blue);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin-bottom: 12px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .loader-text {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+  .error-msg {
+    padding: 20px;
+    background: rgba(255,107,107,0.08);
+    border: 1px solid var(--red);
+    border-radius: 6px;
+    color: var(--red);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    margin: 16px;
+  }
+
+  /* Beaufort indicator on arrow */
+  .arrow-bg {
+    fill: rgba(255,255,255,0.03);
+    stroke: var(--border-strong);
+    stroke-width: 1;
+  }
+
+  @media (min-width: 600px) {
+    body { max-width: 720px; margin: 0 auto; border-left: 1px solid var(--border); border-right: 1px solid var(--border); min-height: 100vh; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="title-row">
+    <div class="brand">
+      <img class="logo" alt="Toronto Windsurfing Club" src="data:image/png;base64,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">
+      <div class="brand-text">
+        <h1>7-day Wind Forecast<br><span class="accent">at Cherry Beach</span></h1>
+        <div class="subtitle">TWC · 43.636°N -79.342°W</div>
+      </div>
+    </div>
+    <div class="status" id="status">
+      <span class="dot"></span><span id="status-text">CONNECTING</span>
+      <div id="updated-at" style="margin-top:2px;"></div>
+    </div>
+  </div>
+
+  <div class="models-row" id="models-row">
+    <!-- model chips injected here -->
+  </div>
+
+  <div class="view-toggle" id="view-toggle">
+    <button class="view-btn" data-view="hours">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 5h18M3 12h18M3 19h18"/></svg>
+      Hourly
+    </button>
+    <button class="view-btn active" data-view="chart">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 17 9 11 13 15 21 7"/><polyline points="14 7 21 7 21 14"/></svg>
+      Chart
+    </button>
+  </div>
+
+  <div class="days-row hidden" id="days-row">
+    <!-- day tabs injected here -->
+  </div>
+</header>
+
+<main>
+  <div id="content">
+    <div class="loader">
+      <div class="loader-spin"></div>
+      <div class="loader-text">Fetching forecasts…</div>
+    </div>
+  </div>
+
+  <div class="legend">
+    <strong>READING THE FORECAST</strong>
+    <div class="row">Each hour shows up to 5 model predictions stacked. Wind shown in <code>knots</code>, gusts (G), and direction the wind is <em>coming from</em> (arrow points to where it's headed).</div>
+    <div class="row"><strong>COLOR SCALE</strong> · <span class="speed-light">&lt;10kt light</span> · <span class="speed-good">10-22kt good</span> · <span class="speed-strong">22-32kt strong</span> · <span class="speed-extreme">32kt+ extreme</span></div>
+    <div class="row"><strong>MODELS</strong> · HRDPS (Canada 2.5km, regional best) · ECMWF (global gold standard) · GFS (NOAA) · ICON (DWD Germany) · GEM (Canada global)</div>
+    <div class="row">Data: <a href="https://open-meteo.com" style="color:var(--blue);text-decoration:none;">open-meteo.com</a> (CC BY 4.0). No tracking, no database — fetched live in your browser.</div>
+  </div>
+</main>
+
+<script>
+// ============================================================================
+// Toronto Windsurfing Club — Cherry Beach wind forecast
+// Single-file, browser-only, real-time Open-Meteo fetch
+// ============================================================================
+
+const LOCATION = { lat: 43.636, lon: -79.342, name: "Cherry Beach / TWC" };
+
+// Model definitions — ordered with HRDPS (regional, highest-res for area) first
+const MODELS = [
+  { key: 'gem_hrdps_continental', label: 'HRDPS', desc: 'Canada 2.5km', color: 'var(--m-hrdps)' },
+  { key: 'ecmwf_ifs025',          label: 'ECMWF', desc: 'Global IFS',  color: 'var(--m-ecmwf)' },
+  { key: 'gfs_seamless',          label: 'GFS',   desc: 'NOAA',         color: 'var(--m-gfs)' },
+  { key: 'icon_seamless',         label: 'ICON',  desc: 'DWD',          color: 'var(--m-icon)' },
+  { key: 'gem_seamless',          label: 'GEM',   desc: 'Canada Global',color: 'var(--m-gem)' }
+];
+
+// Active model selection (all on by default)
+const activeModels = new Set(MODELS.map(m => m.key));
+let selectedDayIdx = 0; // 0 = today
+let currentView = 'chart'; // 'hours' | 'chart'
+let forecastData = null; // { [modelKey]: { time: [...], wind_speed_10m, wind_direction_10m, wind_gusts_10m } }
+
+// ----- Utilities -----
+function knotsClass(kn) {
+  if (kn == null) return '';
+  if (kn < 10) return 'speed-light';
+  if (kn < 22) return 'speed-good';
+  if (kn < 32) return 'speed-strong';
+  return 'speed-extreme';
+}
+
+function formatHour(d) {
+  let h = d.getHours();
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  h = h % 12; if (h === 0) h = 12;
+  return { hh: h, ampm };
+}
+
+const DOW = ['SUN','MON','TUE','WED','THU','FRI','SAT'];
+
+function dayKey(d) {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+// Wind direction arrow SVG — wind comes FROM direction, arrow points where it's GOING (i.e. + 180)
+function arrowSvg(direction, speed, color) {
+  if (direction == null || speed == null) return '<svg viewBox="0 0 24 24"></svg>';
+  // The wind direction is the direction the wind comes from in meteorological convention.
+  // The arrow visually points in the direction the wind is moving (downwind).
+  // rotation: 0° = wind from north blowing south → arrow points down
+  const rot = direction; // 0 = from N → tail at N, head at S
+  const colorClass = knotsClass(speed);
+  const colorVal = {
+    'speed-light': 'var(--text-faint)',
+    'speed-good': 'var(--blue)',
+    'speed-strong': 'var(--gold)',
+    'speed-extreme': 'var(--red)',
+    '': color
+  }[colorClass] || color;
+  return `
+    <svg viewBox="0 0 24 24" style="transform: rotate(${rot}deg); transition: transform 0.4s;">
+      <circle cx="12" cy="12" r="11" class="arrow-bg"/>
+      <!-- arrow body: tail at top (12,3) → head at bottom (12,21). When rot=0, points south (downwind from north). -->
+      <line x1="12" y1="4" x2="12" y2="18" stroke="${colorVal}" stroke-width="2" stroke-linecap="round"/>
+      <polygon points="12,21 8,15 16,15" fill="${colorVal}"/>
+      <circle cx="12" cy="4" r="1.5" fill="${colorVal}" opacity="0.6"/>
+    </svg>
+  `;
+}
+
+function compassLabel(dir) {
+  if (dir == null) return '—';
+  const dirs = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
+  return dirs[Math.round(dir / 22.5) % 16];
+}
+
+// ----- Fetch -----
+async function fetchForecast() {
+  // Build comma-separated model list for the multi-model API call
+  const modelsParam = MODELS.map(m => m.key).join(',');
+  const params = new URLSearchParams({
+    latitude: LOCATION.lat,
+    longitude: LOCATION.lon,
+    hourly: 'wind_speed_10m,wind_direction_10m,wind_gusts_10m',
+    wind_speed_unit: 'kn',     // knots
+    timezone: 'America/Toronto',
+    forecast_days: 7,
+    models: modelsParam
+  });
+  const url = `https://api.open-meteo.com/v1/forecast?${params.toString()}`;
+
+  const r = await fetch(url);
+  if (!r.ok) {
+    const errText = await r.text().catch(() => '');
+    throw new Error(`API ${r.status}: ${errText.slice(0,140)}`);
+  }
+  const j = await r.json();
+
+  // Open-Meteo, when multiple models are requested, suffixes variable names
+  // with the model key. e.g. wind_speed_10m_gem_hrdps_continental.
+  // Be defensive: try the suffixed name first, then fall back to a base name
+  // (which would only be present if the API returns a single merged series).
+  const time = j.hourly?.time || [];
+  const h = j.hourly || {};
+  const byModel = {};
+  for (const m of MODELS) {
+    byModel[m.key] = {
+      time,
+      wind_speed_10m:     h[`wind_speed_10m_${m.key}`]     || h[`wind_speed_10m`]     || [],
+      wind_direction_10m: h[`wind_direction_10m_${m.key}`] || h[`wind_direction_10m`] || [],
+      wind_gusts_10m:     h[`wind_gusts_10m_${m.key}`]     || h[`wind_gusts_10m`]     || []
+    };
+  }
+  return byModel;
+}
+
+// ----- Rendering -----
+function renderModelChips() {
+  const row = document.getElementById('models-row');
+  row.innerHTML = MODELS.map(m => `
+    <button class="model-chip ${activeModels.has(m.key) ? 'active' : ''}"
+            data-key="${m.key}"
+            style="--c: ${m.color};"
+            title="${m.desc}">
+      <span class="swatch" style="--c: ${m.color};"></span>
+      ${m.label}
+    </button>
+  `).join('');
+  row.querySelectorAll('.model-chip').forEach(b => {
+    b.addEventListener('click', () => {
+      const k = b.dataset.key;
+      if (activeModels.has(k)) {
+        if (activeModels.size > 1) activeModels.delete(k); // require at least 1
+      } else {
+        activeModels.add(k);
+      }
+      renderModelChips();
+      renderView();
+    });
+  });
+}
+
+function renderDayTabs() {
+  if (!forecastData) return;
+  // Determine the 7 distinct day keys from the time array of the first available model
+  const sample = forecastData[MODELS[0].key];
+  if (!sample || !sample.time.length) return;
+  const uniqueDays = [];
+  const seen = new Set();
+  for (const t of sample.time) {
+    const d = new Date(t);
+    const k = dayKey(d);
+    if (!seen.has(k)) { seen.add(k); uniqueDays.push(d); }
+    if (uniqueDays.length === 7) break;
+  }
+  const today = new Date();
+  const todayKey = dayKey(today);
+
+  const row = document.getElementById('days-row');
+  row.innerHTML = uniqueDays.map((d, i) => `
+    <button class="day-tab ${i === selectedDayIdx ? 'active' : ''} ${dayKey(d) === todayKey ? 'today' : ''}" data-idx="${i}">
+      <div class="dow">${dayKey(d) === todayKey ? 'TODAY' : DOW[d.getDay()]}</div>
+      <div class="dom">${d.getDate()}</div>
+    </button>
+  `).join('');
+  row.querySelectorAll('.day-tab').forEach(b => {
+    b.addEventListener('click', () => {
+      selectedDayIdx = parseInt(b.dataset.idx, 10);
+      renderDayTabs();
+      renderView();
+    });
+  });
+}
+
+function renderSummary(hoursOnDay) {
+  // Aggregate across active models for the selected day to give a "what to expect" band
+  let speeds = [], gusts = [], dirs = [];
+  for (const row of hoursOnDay) {
+    for (const m of MODELS) {
+      if (!activeModels.has(m.key)) continue;
+      const s = row.models[m.key];
+      if (s && s.speed != null) speeds.push(s.speed);
+      if (s && s.gust != null) gusts.push(s.gust);
+      if (s && s.dir != null) dirs.push(s.dir);
+    }
+  }
+  const avg = arr => arr.length ? arr.reduce((a,b)=>a+b,0)/arr.length : null;
+  const max = arr => arr.length ? Math.max(...arr) : null;
+
+  // Average direction via vectors
+  let avgDir = null;
+  if (dirs.length) {
+    let sx = 0, sy = 0;
+    dirs.forEach(d => { const r = d * Math.PI / 180; sx += Math.sin(r); sy += Math.cos(r); });
+    avgDir = (Math.atan2(sx, sy) * 180 / Math.PI + 360) % 360;
+  }
+
+  const peak = max(speeds);
+  const peakG = max(gusts);
+  const meanSp = avg(speeds);
+
+  return `
+    <div class="summary">
+      <div class="summary-cell">
+        <div class="label">AVG WIND</div>
+        <div class="value ${knotsClass(meanSp)}">${meanSp != null ? Math.round(meanSp) : '—'}<span class="unit">kt</span></div>
+      </div>
+      <div class="summary-cell">
+        <div class="label">PEAK GUST</div>
+        <div class="value ${knotsClass(peakG)}">${peakG != null ? Math.round(peakG) : '—'}<span class="unit">kt</span></div>
+      </div>
+      <div class="summary-cell">
+        <div class="label">DIR</div>
+        <div class="value">${compassLabel(avgDir)}</div>
+      </div>
+    </div>
+  `;
+}
+
+function renderHourly() {
+  if (!forecastData) return;
+  const content = document.getElementById('content');
+
+  // Build hours indexed for the selected day
+  const sample = forecastData[MODELS[0].key];
+  const uniqueDays = [];
+  const seen = new Set();
+  for (const t of sample.time) {
+    const d = new Date(t);
+    const k = dayKey(d);
+    if (!seen.has(k)) { seen.add(k); uniqueDays.push(k); }
+    if (uniqueDays.length === 7) break;
+  }
+  const targetDayKey = uniqueDays[selectedDayIdx];
+
+  // Build a row for each hour on that day
+  const hoursOnDay = [];
+  for (let i = 0; i < sample.time.length; i++) {
+    const d = new Date(sample.time[i]);
+    if (dayKey(d) !== targetDayKey) continue;
+    const row = { date: d, models: {} };
+    for (const m of MODELS) {
+      const md = forecastData[m.key];
+      const speed = md.wind_speed_10m[i];
+      const dir = md.wind_direction_10m[i];
+      const gust = md.wind_gusts_10m[i];
+      row.models[m.key] = {
+        speed: (speed == null || isNaN(speed)) ? null : speed,
+        dir: (dir == null || isNaN(dir)) ? null : dir,
+        gust: (gust == null || isNaN(gust)) ? null : gust
+      };
+    }
+    hoursOnDay.push(row);
+  }
+
+  // Max speed across active models / hours for bar scaling
+  let scaleMax = 0;
+  for (const row of hoursOnDay) {
+    for (const m of MODELS) {
+      if (!activeModels.has(m.key)) continue;
+      const md = row.models[m.key];
+      if (md.gust != null && md.gust > scaleMax) scaleMax = md.gust;
+      if (md.speed != null && md.speed > scaleMax) scaleMax = md.speed;
+    }
+  }
+  if (scaleMax < 15) scaleMax = 15; // floor so light days don't look extreme
+
+  const now = new Date();
+  const nowKey = dayKey(now);
+  const nowHour = now.getHours();
+
+  let html = renderSummary(hoursOnDay);
+  html += '<div class="hourly-list">';
+
+  for (const row of hoursOnDay) {
+    const isNow = dayKey(row.date) === nowKey && row.date.getHours() === nowHour;
+    const { hh, ampm } = formatHour(row.date);
+
+    // Sailable check: any active model >= 12kt
+    const sailable = MODELS.some(m =>
+      activeModels.has(m.key) &&
+      row.models[m.key].speed != null &&
+      row.models[m.key].speed >= 12
+    );
+
+    html += `
+      <div class="hour-row ${isNow ? 'now' : ''} ${sailable && !isNow ? 'sailable' : ''}">
+        <div class="hour-time">
+          <div class="hh">${hh}</div>
+          <div class="ampm">${ampm}</div>
+        </div>
+        <div class="models-stack">
+    `;
+    for (const m of MODELS) {
+      if (!activeModels.has(m.key)) continue;
+      const md = row.models[m.key];
+      if (md.speed == null) {
+        html += `
+          <div class="model-row" style="--c: ${m.color};">
+            <div class="model-label">${m.label}</div>
+            <div class="no-data">no data</div>
+            <div></div>
+            <div></div>
+          </div>
+        `;
+        continue;
+      }
+      const speedPct = Math.min(100, (md.speed / scaleMax) * 100);
+      const gustPct = md.gust != null ? Math.min(100, (md.gust / scaleMax) * 100) : null;
+      const speedClass = knotsClass(md.speed);
+      html += `
+        <div class="model-row" style="--c: ${m.color};">
+          <div class="model-label">${m.label}</div>
+          <div class="model-speeds">
+            <span class="wind ${speedClass}">${Math.round(md.speed)}</span>
+            ${md.gust != null ? `<span class="gust">${Math.round(md.gust)}</span>` : ''}
+          </div>
+          <div class="model-arrow">${arrowSvg(md.dir, md.speed, m.color)}</div>
+          <div class="bar-track">
+            <div class="bar-fill" style="width: ${speedPct}%;"></div>
+            ${gustPct != null ? `<div class="bar-gust" style="left: ${gustPct}%;"></div>` : ''}
+          </div>
+        </div>
+      `;
+    }
+    html += '</div></div>';
+  }
+  html += '</div>';
+  content.innerHTML = html;
+}
+
+// ============================================================================
+// Chart view — pure SVG, full 7-day timeline, wind + gusts per model
+// ============================================================================
+function renderChart() {
+  if (!forecastData) return;
+  const content = document.getElementById('content');
+
+  // Resolve color CSS variables to actual values (computed style on body)
+  const styles = getComputedStyle(document.body);
+  const resolveColor = c => {
+    if (!c.startsWith('var(')) return c;
+    const name = c.slice(4, -1).trim();
+    return styles.getPropertyValue(name).trim() || '#fff';
+  };
+
+  // Build the unified hourly series from the first model (all share the time axis)
+  const baseTime = forecastData[MODELS[0].key].time;
+  const N = baseTime.length;
+  if (!N) {
+    content.innerHTML = '<div class="error-msg">No data to chart.</div>';
+    return;
+  }
+
+  // Determine y-axis max from active models (speeds + gusts)
+  let yMax = 0;
+  for (const m of MODELS) {
+    if (!activeModels.has(m.key)) continue;
+    const md = forecastData[m.key];
+    for (let i = 0; i < N; i++) {
+      const s = md.wind_speed_10m[i];
+      const g = md.wind_gusts_10m[i];
+      if (s != null && !isNaN(s) && s > yMax) yMax = s;
+      if (g != null && !isNaN(g) && g > yMax) yMax = g;
+    }
+  }
+  // Round up to next nice number, with a floor of 25 so empty light days don't look extreme
+  yMax = Math.max(25, Math.ceil(yMax / 5) * 5 + 5);
+
+  // Dimensions
+  const HOUR_W = 22;                // px per hour — wide enough for hour labels
+  const chartW = N * HOUR_W;
+  const margin = { top: 8, right: 12, bottom: 42, left: 38 };
+  const dirStripH = 28;             // arrow strip
+  const plotH = 220;
+  const totalH = margin.top + dirStripH + plotH + margin.bottom;
+  const svgW = margin.left + chartW + margin.right;
+  const plotTop = margin.top + dirStripH + 8;
+  const plotBottom = plotTop + plotH;
+
+  const xAt = i => margin.left + i * HOUR_W + HOUR_W / 2;
+  const yAt = v => plotBottom - (v / yMax) * plotH;
+
+  // Y-axis ticks (every 5 kt)
+  const yTicks = [];
+  for (let v = 0; v <= yMax; v += 5) yTicks.push(v);
+
+  // Find day boundaries and "now" index
+  const dayBoundaries = []; // { idx, label }
+  let lastDayKey = '';
+  for (let i = 0; i < N; i++) {
+    const d = new Date(baseTime[i]);
+    const dk = dayKey(d);
+    if (dk !== lastDayKey) {
+      const today = new Date();
+      const lbl = dk === dayKey(today) ? 'TODAY' : DOW[d.getDay()] + ' ' + d.getDate();
+      dayBoundaries.push({ idx: i, label: lbl });
+      lastDayKey = dk;
+    }
+  }
+  // Now index (closest hour to current time)
+  const now = new Date();
+  let nowIdx = -1, bestDiff = Infinity;
+  for (let i = 0; i < N; i++) {
+    const t = new Date(baseTime[i]);
+    const diff = Math.abs(t - now);
+    if (diff < bestDiff) { bestDiff = diff; nowIdx = i; }
+  }
+
+  // ---- Build SVG ----
+  let svg = `<svg class="chart-svg" width="${svgW}" height="${totalH}" viewBox="0 0 ${svgW} ${totalH}" xmlns="http://www.w3.org/2000/svg">`;
+
+  // Sailable color bands (behind everything)
+  const bands = [
+    { from: 0,  to: 10,    cls: 'band-light',   label: 'LIGHT' },
+    { from: 10, to: 22,    cls: 'band-good',    label: 'GOOD' },
+    { from: 22, to: 32,    cls: 'band-strong',  label: 'STRONG' },
+    { from: 32, to: yMax,  cls: 'band-extreme', label: 'EXTREME' }
+  ];
+  for (const b of bands) {
+    if (b.from >= yMax) continue;
+    const top = yAt(Math.min(b.to, yMax));
+    const bot = yAt(b.from);
+    svg += `<rect class="${b.cls}" x="${margin.left}" y="${top}" width="${chartW}" height="${bot - top}"/>`;
+    svg += `<text class="band-label" x="${margin.left + 4}" y="${bot - 3}">${b.label}</text>`;
+  }
+
+  // Y grid lines & labels
+  for (const v of yTicks) {
+    const y = yAt(v);
+    svg += `<line class="grid-line" x1="${margin.left}" y1="${y}" x2="${margin.left + chartW}" y2="${y}"/>`;
+    svg += `<text class="axis-label" x="${margin.left - 6}" y="${y + 3}" text-anchor="end">${v}</text>`;
+  }
+  // Y-axis unit label
+  svg += `<text class="axis-label" x="${margin.left - 6}" y="${plotTop - 4}" text-anchor="end" style="font-weight:700;">kt</text>`;
+
+  // 10 kt sailable threshold line — the line below which conditions are too light
+  if (yMax >= 10) {
+    const y10 = yAt(10);
+    svg += `<line class="threshold-line" x1="${margin.left}" y1="${y10}" x2="${margin.left + chartW}" y2="${y10}"/>`;
+    // Position the label tag right next to the y-axis so it's always visible regardless of horizontal scroll
+    svg += `<rect class="threshold-tag-bg" x="${margin.left + 4}" y="${y10 - 9}" width="68" height="14" rx="2"/>`;
+    svg += `<text class="threshold-tag" x="${margin.left + 38}" y="${y10 + 1}" text-anchor="middle">10kt MIN</text>`;
+  }
+
+  // 10 KNOT SAILABLE THRESHOLD — the "should I bother going?" line
+  if (10 <= yMax) {
+    const y10 = yAt(10);
+    svg += `<line class="threshold-line" x1="${margin.left}" y1="${y10}" x2="${margin.left + chartW}" y2="${y10}"/>`;
+    // Sticky label that stays visible — anchor to far right of chart
+    svg += `<rect class="threshold-tag-bg" x="${margin.left + chartW - 78}" y="${y10 - 9}" width="74" height="18" rx="2"/>`;
+    svg += `<text class="threshold-tag" x="${margin.left + chartW - 41}" y="${y10 + 3}" text-anchor="middle">10kt SAIL</text>`;
+    // And a left-side tag too so it's visible when scrolled to the start
+    svg += `<rect class="threshold-tag-bg" x="${margin.left + 4}" y="${y10 - 9}" width="74" height="18" rx="2"/>`;
+    svg += `<text class="threshold-tag" x="${margin.left + 41}" y="${y10 + 3}" text-anchor="middle">10kt SAIL</text>`;
+  }
+
+  // Day dividers + labels
+  for (let di = 0; di < dayBoundaries.length; di++) {
+    const { idx, label } = dayBoundaries[di];
+    const x = margin.left + idx * HOUR_W;
+    if (di > 0) {
+      svg += `<line class="day-divider" x1="${x}" y1="${plotTop}" x2="${x}" y2="${plotBottom}"/>`;
+    }
+    // Day label centered between this boundary and next (or end)
+    const nextIdx = (di + 1 < dayBoundaries.length) ? dayBoundaries[di + 1].idx : N;
+    const labelX = margin.left + ((idx + nextIdx) / 2) * HOUR_W;
+    svg += `<text class="day-label" x="${labelX}" y="${totalH - 8}" text-anchor="middle">${label}</text>`;
+  }
+
+  // Hour ticks on x-axis — show every hour in 24h format
+  for (let i = 0; i < N; i++) {
+    const d = new Date(baseTime[i]);
+    const x = xAt(i);
+    const h = d.getHours();
+    // Tick: stronger at midnight, normal elsewhere
+    const isMidnight = h === 0;
+    svg += `<line class="grid-line${isMidnight ? '-strong' : ''}" x1="${x}" y1="${plotBottom}" x2="${x}" y2="${plotBottom + (isMidnight ? 6 : 3)}"/>`;
+    svg += `<text class="hour-label" x="${x}" y="${plotBottom + 13}" text-anchor="middle">${h}</text>`;
+  }
+
+  // Direction strip background
+  svg += `<rect class="dir-strip-bg" x="${margin.left}" y="${margin.top}" width="${chartW}" height="${dirStripH}"/>`;
+  svg += `<text class="axis-label" x="${margin.left - 6}" y="${margin.top + dirStripH / 2 + 3}" text-anchor="end">DIR</text>`;
+
+  // Direction arrows — use average of active models, every 3 hours (to keep it readable)
+  const arrowStep = 3;
+  for (let i = 0; i < N; i += arrowStep) {
+    let sx = 0, sy = 0, sSpeed = 0, cnt = 0;
+    for (const m of MODELS) {
+      if (!activeModels.has(m.key)) continue;
+      const dir = forecastData[m.key].wind_direction_10m[i];
+      const sp = forecastData[m.key].wind_speed_10m[i];
+      if (dir == null || isNaN(dir)) continue;
+      const r = dir * Math.PI / 180;
+      sx += Math.sin(r); sy += Math.cos(r);
+      if (sp != null && !isNaN(sp)) sSpeed += sp;
+      cnt++;
+    }
+    if (!cnt) continue;
+    const avgDir = (Math.atan2(sx, sy) * 180 / Math.PI + 360) % 360;
+    const avgSp = sSpeed / cnt;
+    const cx = xAt(i);
+    const cy = margin.top + dirStripH / 2;
+    const colorClass = knotsClass(avgSp);
+    const colorVar = {
+      'speed-light': '--text-dim',
+      'speed-good': '--blue',
+      'speed-strong': '--gold',
+      'speed-extreme': '--red',
+      '': '--blue'
+    }[colorClass];
+    const color = styles.getPropertyValue(colorVar).trim() || '#006cd8';
+
+    // Arrow points the direction wind is going (downwind). dir=0 means wind FROM north, going SOUTH (down).
+    // We draw the arrow with tail at top, head at bottom, then rotate by avgDir.
+    const len = 9;
+    svg += `<g transform="translate(${cx},${cy}) rotate(${avgDir})">`;
+    svg += `<line class="dir-arrow" x1="0" y1="${-len}" x2="0" y2="${len - 2}" stroke="${color}"/>`;
+    svg += `<polygon class="dir-arrow-head" points="0,${len + 1} -3,${len - 4} 3,${len - 4}" fill="${color}"/>`;
+    svg += `</g>`;
+  }
+
+  // Now line (above bands, below data lines)
+  if (nowIdx >= 0) {
+    const xNow = xAt(nowIdx);
+    svg += `<line class="now-line" x1="${xNow}" y1="${margin.top}" x2="${xNow}" y2="${plotBottom}"/>`;
+    svg += `<text class="now-label" x="${xNow + 4}" y="${margin.top + 10}">NOW</text>`;
+  }
+
+  // ---- Plot lines per model ----
+  // Build polylines (skip null gaps using path with M/L)
+  for (const m of MODELS) {
+    if (!activeModels.has(m.key)) continue;
+    const color = resolveColor(m.color);
+    const md = forecastData[m.key];
+
+    // Wind speed line
+    let speedPath = '';
+    let speedStart = true;
+    for (let i = 0; i < N; i++) {
+      const v = md.wind_speed_10m[i];
+      if (v == null || isNaN(v)) { speedStart = true; continue; }
+      const x = xAt(i), y = yAt(v);
+      speedPath += (speedStart ? `M${x},${y}` : `L${x},${y}`);
+      speedStart = false;
+    }
+    if (speedPath) {
+      svg += `<path class="wind-line" d="${speedPath}" stroke="${color}"/>`;
+    }
+
+    // Gust line (dashed)
+    let gustPath = '';
+    let gustStart = true;
+    for (let i = 0; i < N; i++) {
+      const v = md.wind_gusts_10m[i];
+      if (v == null || isNaN(v)) { gustStart = true; continue; }
+      const x = xAt(i), y = yAt(v);
+      gustPath += (gustStart ? `M${x},${y}` : `L${x},${y}`);
+      gustStart = false;
+    }
+    if (gustPath) {
+      svg += `<path class="gust-line" d="${gustPath}" stroke="${color}" opacity="0.65"/>`;
+    }
+  }
+
+  svg += '</svg>';
+
+  // Legend & wrapper
+  const legendItems = MODELS.filter(m => activeModels.has(m.key)).map(m => `
+    <div class="item" style="--c: ${m.color};"><span class="line-sample"></span>${m.label}</div>
+  `).join('');
+  const legendDashed = `
+    <div class="item" style="--c: var(--text-dim);"><span class="line-sample dashed"></span>GUSTS</div>
+  `;
+
+  // Auto-scroll to "now" after render
+  content.innerHTML = `
+    <div class="chart-wrap">
+      <div class="chart-scroll" id="chart-scroll">
+        ${svg}
+      </div>
+      <div class="chart-legend">
+        ${legendItems}
+        ${legendDashed}
+      </div>
+      <div class="chart-hint">Swipe horizontally · solid = wind · dashed = gusts · blue line = 10kt sail threshold</div>
+    </div>
+  `;
+
+  // Scroll to "now" position so the user lands on the current moment
+  requestAnimationFrame(() => {
+    const scroller = document.getElementById('chart-scroll');
+    if (scroller && nowIdx >= 0) {
+      const targetX = xAt(nowIdx) - scroller.clientWidth * 0.25;
+      scroller.scrollLeft = Math.max(0, targetX);
+    }
+  });
+}
+
+// View dispatcher
+function renderView() {
+  if (currentView === 'hours') {
+    document.getElementById('days-row').classList.remove('hidden');
+    renderHourly();
+  } else {
+    document.getElementById('days-row').classList.add('hidden');
+    renderChart();
+  }
+}
+
+function renderViewToggle() {
+  const toggle = document.getElementById('view-toggle');
+  toggle.querySelectorAll('.view-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.view === currentView);
+    b.onclick = () => {
+      if (currentView === b.dataset.view) return;
+      currentView = b.dataset.view;
+      renderViewToggle();
+      renderView();
+    };
+  });
+}
+
+function setStatus(text, ok = true) {
+  document.getElementById('status-text').textContent = text;
+  document.getElementById('status').classList.toggle('error', !ok);
+}
+
+function setUpdated() {
+  const d = new Date();
+  const hh = String(d.getHours()).padStart(2,'0');
+  const mm = String(d.getMinutes()).padStart(2,'0');
+  document.getElementById('updated-at').textContent = `UPD ${hh}:${mm}`;
+}
+
+// ----- Boot -----
+async function load() {
+  renderModelChips();
+  renderViewToggle();
+  try {
+    setStatus('FETCHING');
+    forecastData = await fetchForecast();
+    setStatus('LIVE');
+    setUpdated();
+    renderDayTabs();
+    renderView();
+  } catch (err) {
+    console.error(err);
+    setStatus('ERROR', false);
+    document.getElementById('content').innerHTML = `
+      <div class="error-msg">
+        Failed to load forecast: ${err.message}<br><br>
+        The site fetches live data from Open-Meteo. Check your connection and try again.
+      </div>
+    `;
+  }
+}
+
+load();
+
+// Auto-refresh every 30 minutes (Open-Meteo regional models update hourly; global every 3-6h)
+setInterval(load, 30 * 60 * 1000);
+
+// Pull-to-refresh-ish: refresh when tab becomes visible after >5 min
+let lastLoad = Date.now();
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && Date.now() - lastLoad > 5 * 60 * 1000) {
+    lastLoad = Date.now();
+    load();
+  }
+});
+</script>
+
+</body>
+</html>
