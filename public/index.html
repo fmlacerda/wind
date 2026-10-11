@@ -751,7 +751,7 @@
     <div class="row"><strong>MODELS</strong> · HRDPS (Canada 2.5km, regional best) · ECMWF (global gold standard) · GFS (NOAA) · ICON (DWD Germany) · GEM (Canada global)</div>
     <div class="row">Data: <a href="https://open-meteo.com" style="color:var(--blue);text-decoration:none;">open-meteo.com</a> (CC BY 4.0). No tracking, no database — fetched live in your browser.</div>
     <!-- Bump on every release so the live site's version can be checked. -->
-    <div class="row"><strong>VERSION</strong> · v1.2 · 2026-10-11 · white theme, wind map</div>
+    <div class="row"><strong>VERSION</strong> · v1.3 · 2026-10-11 · white theme, wind map, 2 kt chart scale</div>
   </div>
 </main>
 
@@ -1197,15 +1197,16 @@ function renderChart() {
       if (g != null && !isNaN(g) && g > yMax) yMax = g;
     }
   }
-  // Round up to next nice number, with a floor of 25 so empty light days don't look extreme
-  yMax = Math.max(25, Math.ceil(yMax / 5) * 5 + 5);
+  // Round up to the next even number, with a floor of 26 so empty light days don't look extreme
+  yMax = Math.max(26, Math.ceil(yMax / 2) * 2 + 2);
 
   // Dimensions
   const HOUR_W = 22;                // px per hour — wide enough for hour labels
   const chartW = N * HOUR_W;
   const margin = { top: 8, right: 12, bottom: 42, left: 38 };
   const dirStripH = 28;             // arrow strip
-  const plotH = 220;
+  const Y_STEP = 2;                 // kt between y-axis ticks
+  const plotH = Math.max(220, (yMax / Y_STEP) * 12); // keep tick labels >= 12px apart
   const totalH = margin.top + dirStripH + plotH + margin.bottom;
   const svgW = margin.left + chartW + margin.right;
   const plotTop = margin.top + dirStripH + 8;
@@ -1214,9 +1215,9 @@ function renderChart() {
   const xAt = i => margin.left + i * HOUR_W + HOUR_W / 2;
   const yAt = v => plotBottom - (v / yMax) * plotH;
 
-  // Y-axis ticks (every 5 kt)
+  // Y-axis ticks (every Y_STEP kt)
   const yTicks = [];
-  for (let v = 0; v <= yMax; v += 5) yTicks.push(v);
+  for (let v = 0; v <= yMax; v += Y_STEP) yTicks.push(v);
 
   // Find day boundaries and "now" index
   const dayBoundaries = []; // { idx, label }
