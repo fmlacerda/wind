@@ -1,0 +1,8 @@
+// Cloudflare Workers config: serve the static site in public/.
+{
+  "name": "wind",
+  "compatibility_date": "2026-10-06",
+  "assets": {
+    "directory": "./public"
+  }
+}
