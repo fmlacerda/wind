@@ -746,12 +746,12 @@
 
   <div class="legend">
     <strong>READING THE FORECAST</strong>
-    <div class="row">Each hour shows up to 5 model predictions stacked. Wind shown in <code>knots</code>, gusts (G), and direction the wind is <em>coming from</em> (arrow points to where it's headed).</div>
+    <div class="row">Forecast covers 8 AM–8 PM each day. Each hour shows up to 5 model predictions stacked. Wind shown in <code>knots</code>, gusts (G), and direction the wind is <em>coming from</em> (arrow points to where it's headed).</div>
     <div class="row"><strong>COLOR SCALE</strong> · <span class="speed-light">&lt;10kt light</span> · <span class="speed-good">10-22kt good</span> · <span class="speed-strong">22-32kt strong</span> · <span class="speed-extreme">32kt+ extreme</span></div>
     <div class="row"><strong>MODELS</strong> · HRDPS (Canada 2.5km, regional best) · ECMWF (global gold standard) · GFS (NOAA) · ICON (DWD Germany) · GEM (Canada global)</div>
     <div class="row">Data: <a href="https://open-meteo.com" style="color:var(--blue);text-decoration:none;">open-meteo.com</a> (CC BY 4.0). No tracking, no database — fetched live in your browser.</div>
     <!-- Bump on every release so the live site's version can be checked. -->
-    <div class="row"><strong>VERSION</strong> · v1.3 · 2026-10-11 · white theme, wind map, 2 kt chart scale</div>
+    <div class="row"><strong>VERSION</strong> · v1.4 · 2026-10-11 · 8 AM–8 PM forecast</div>
   </div>
 </main>
 
@@ -760,6 +760,10 @@
 // Toronto Windsurfing Club — Cherry Beach wind forecast
 // Single-file, browser-only, real-time Open-Meteo fetch
 // ============================================================================
+
+// Hours shown in every view (inclusive, Toronto time) — night hours are dropped
+const DAY_START_HOUR = 8;   // 8 AM
+const DAY_END_HOUR = 20;    // 8 PM
 
 const LOCATION = { lat: 43.636, lon: -79.342, name: "Cherry Beach / TWC" };
 
@@ -845,15 +849,25 @@ function compassLabel(dir) {
   return dirs[Math.round(dir / 22.5) % 16];
 }
 
-// Index of the forecast hour closest to the current Toronto time (-1 if none)
+// Index of the forecast hour closest to the current Toronto time, or -1 when
+// nothing is within half an hour (e.g. overnight, outside the hours shown)
 function nearestNowIdx(time) {
   const now = nowInToronto();
-  let idx = -1, bestDiff = Infinity;
+  let idx = -1, bestDiff = 30 * 60 * 1000;
   for (let i = 0; i < time.length; i++) {
     const diff = Math.abs(new Date(time[i]) - now);
-    if (diff < bestDiff) { bestDiff = diff; idx = i; }
+    if (diff <= bestDiff) { bestDiff = diff; idx = i; }
   }
   return idx;
+}
+
+// Hour to open on: the current hour if shown, else the next one coming up
+function startIdx(time) {
+  const nowIdx = nearestNowIdx(time);
+  if (nowIdx >= 0) return nowIdx;
+  const now = nowInToronto();
+  const next = time.findIndex(t => new Date(t) > now);
+  return next >= 0 ? next : Math.max(0, time.length - 1);
 }
 
 // Smallest angle between two compass bearings (0–180)
@@ -932,15 +946,23 @@ async function fetchForecast() {
   // with the model key. e.g. wind_speed_10m_gem_hrdps_continental.
   // Be defensive: try the suffixed name first, then fall back to a base name
   // (which would only be present if the API returns a single merged series).
-  const time = j.hourly?.time || [];
+  const allTime = j.hourly?.time || [];
   const h = j.hourly || {};
+  // Keep sailing hours only (8 AM–8 PM, Toronto time). Times look like "2026-10-11T14:00".
+  const keep = [];
+  allTime.forEach((t, i) => {
+    const hr = +t.slice(11, 13);
+    if (hr >= DAY_START_HOUR && hr <= DAY_END_HOUR) keep.push(i);
+  });
+  const pick = arr => keep.map(i => arr[i]);
+  const time = pick(allTime);
   const byModel = {};
   for (const m of MODELS) {
     byModel[m.key] = {
       time,
-      wind_speed_10m:     h[`wind_speed_10m_${m.key}`]     || h[`wind_speed_10m`]     || [],
-      wind_direction_10m: h[`wind_direction_10m_${m.key}`] || h[`wind_direction_10m`] || [],
-      wind_gusts_10m:     h[`wind_gusts_10m_${m.key}`]     || h[`wind_gusts_10m`]     || []
+      wind_speed_10m:     pick(h[`wind_speed_10m_${m.key}`]     || h[`wind_speed_10m`]     || []),
+      wind_direction_10m: pick(h[`wind_direction_10m_${m.key}`] || h[`wind_direction_10m`] || []),
+      wind_gusts_10m:     pick(h[`wind_gusts_10m_${m.key}`]     || h[`wind_gusts_10m`]     || [])
     };
   }
   return byModel;
@@ -1292,8 +1314,8 @@ function renderChart() {
     const x = xAt(i);
     const h = d.getHours();
     // Tick: stronger at midnight, normal elsewhere
-    const isMidnight = h === 0;
-    svg += `<line class="grid-line${isMidnight ? '-strong' : ''}" x1="${x}" y1="${plotBottom}" x2="${x}" y2="${plotBottom + (isMidnight ? 6 : 3)}"/>`;
+    const isDayStart = h === DAY_START_HOUR;
+    svg += `<line class="grid-line${isDayStart ? '-strong' : ''}" x1="${x}" y1="${plotBottom}" x2="${x}" y2="${plotBottom + (isDayStart ? 6 : 3)}"/>`;
     svg += `<text class="hour-label" x="${x}" y="${plotBottom + 13}" text-anchor="middle">${h}</text>`;
   }
 
@@ -1347,6 +1369,7 @@ function renderChart() {
   }
 
   // ---- Plot lines per model ----
+  const dayStarts = new Set(dayBoundaries.map(b => b.idx));
   // Build polylines (skip null gaps using path with M/L)
   for (const m of MODELS) {
     if (!activeModels.has(m.key)) continue;
@@ -1359,6 +1382,7 @@ function renderChart() {
     for (let i = 0; i < N; i++) {
       const v = md.wind_speed_10m[i];
       if (v == null || isNaN(v)) { speedStart = true; continue; }
+      if (dayStarts.has(i)) speedStart = true; // don't join 8 PM to the next 8 AM
       const x = xAt(i), y = yAt(v);
       speedPath += (speedStart ? `M${x},${y}` : `L${x},${y}`);
       speedStart = false;
@@ -1373,6 +1397,7 @@ function renderChart() {
     for (let i = 0; i < N; i++) {
       const v = md.wind_gusts_10m[i];
       if (v == null || isNaN(v)) { gustStart = true; continue; }
+      if (dayStarts.has(i)) gustStart = true;
       const x = xAt(i), y = yAt(v);
       gustPath += (gustStart ? `M${x},${y}` : `L${x},${y}`);
       gustStart = false;
@@ -1409,8 +1434,8 @@ function renderChart() {
   // Scroll to "now" position so the user lands on the current moment
   requestAnimationFrame(() => {
     const scroller = document.getElementById('chart-scroll');
-    if (scroller && nowIdx >= 0) {
-      const targetX = xAt(nowIdx) - scroller.clientWidth * 0.25;
+    if (scroller) {
+      const targetX = xAt(startIdx(baseTime)) - scroller.clientWidth * 0.25;
       scroller.scrollLeft = Math.max(0, targetX);
     }
   });
@@ -1493,7 +1518,7 @@ function renderMap() {
   const N = time.length;
   if (!N) { content.innerHTML = '<div class="error-msg">No data to map.</div>'; return; }
   const nowIdx = nearestNowIdx(time);
-  if (mapIdx == null || mapIdx >= N) mapIdx = Math.max(0, nowIdx);
+  if (mapIdx == null || mapIdx >= N) mapIdx = startIdx(time);
 
   // Day ticks under the slider
   const ticks = [];
