@@ -222,7 +222,7 @@
   /* Summary band */
   .summary {
     display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-columns: repeat(auto-fit, minmax(62px, 1fr));
     gap: 1px;
     background: var(--border);
     border: 1px solid var(--border);
@@ -311,6 +311,14 @@
     margin-top: 1px;
   }
   .hour-row.now .hour-time .hh { color: var(--gold); }
+  .hour-time .temp {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-dim);
+    margin-top: 6px;
+  }
+  .summary-cell .value.temp { color: var(--text); }
 
   .models-stack {
     display: flex;
@@ -746,12 +754,12 @@
 
   <div class="legend">
     <strong>READING THE FORECAST</strong>
-    <div class="row">Forecast covers 8 AM–8 PM each day. Each hour shows up to 5 model predictions stacked. Wind shown in <code>knots</code>, gusts (G), and direction the wind is <em>coming from</em> (arrow points to where it's headed).</div>
+    <div class="row">Forecast covers 8 AM–8 PM each day. Each hour shows up to 5 model predictions stacked. Wind shown in <code>knots</code>, temperatures in °C, gusts (G), and direction the wind is <em>coming from</em> (arrow points to where it's headed).</div>
     <div class="row"><strong>COLOR SCALE</strong> · <span class="speed-light">&lt;10kt light</span> · <span class="speed-good">10-22kt good</span> · <span class="speed-strong">22-32kt strong</span> · <span class="speed-extreme">32kt+ extreme</span></div>
     <div class="row"><strong>MODELS</strong> · HRDPS (Canada 2.5km, regional best) · ECMWF (global gold standard) · GFS (NOAA) · ICON (DWD Germany) · GEM (Canada global)</div>
     <div class="row">Data: <a href="https://open-meteo.com" style="color:var(--blue);text-decoration:none;">open-meteo.com</a> (CC BY 4.0). No tracking, no database — fetched live in your browser.</div>
     <!-- Bump on every release so the live site's version can be checked. -->
-    <div class="row"><strong>VERSION</strong> · v1.4 · 2026-10-11 · 8 AM–8 PM forecast</div>
+    <div class="row"><strong>VERSION</strong> · v1.5 · 2026-10-12 · air and water temperature</div>
   </div>
 </main>
 
@@ -780,6 +788,8 @@ const MODELS = [
 const activeModels = new Set(MODELS.map(m => m.key));
 let selectedDayIdx = 0; // 0 = today
 let currentView = 'chart'; // 'hours' | 'chart' | 'map'
+let pendingWater = null; // Promise of the water series, started by fetchForecast()
+let waterTemp = null;    // [°C per hour] aligned with forecast times, or null if unavailable
 let forecastData = null; // { [modelKey]: { time: [...], wind_speed_10m, wind_direction_10m, wind_gusts_10m } }
 
 // ----- Utilities -----
@@ -918,13 +928,57 @@ function shoreClassRanges(c) {
 }
 
 // ----- Fetch -----
+// Water temperature from Open-Meteo's Marine API, aligned to `time`. Its coverage
+// of Lake Ontario is uncertain, so any failure or an all-empty series gives null
+// and the page simply doesn't show water temperature.
+async function fetchWaterTemp(time) {
+  try {
+    const params = new URLSearchParams({
+      latitude: LOCATION.lat,
+      longitude: LOCATION.lon,
+      hourly: 'sea_surface_temperature',
+      timezone: 'America/Toronto',
+      forecast_days: 7,
+      cell_selection: 'sea'
+    });
+    // Don't let a slow marine request hold up the wind forecast
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 8000);
+    const r = await fetch(`https://marine-api.open-meteo.com/v1/marine?${params.toString()}`, { signal: ctrl.signal })
+      .finally(() => clearTimeout(timer));
+    if (!r.ok) return null;
+    const j = await r.json();
+    const byTime = new Map((j.hourly?.time || []).map((t, i) => [t, j.hourly.sea_surface_temperature?.[i]]));
+    const series = time.map(t => byTime.get(t) ?? null);
+    return series.some(v => v != null) ? series : null;
+  } catch (err) {
+    console.warn('Water temperature unavailable', err);
+    return null;
+  }
+}
+
+// Mean air temperature (°C) across active models at hour i, or null
+function airTempAt(i) {
+  const vals = MODELS.filter(m => activeModels.has(m.key))
+    .map(m => forecastData[m.key].temperature_2m[i])
+    .filter(v => v != null && !isNaN(v));
+  return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+}
+
+function waterTempAt(i) {
+  const v = waterTemp?.[i];
+  return v == null || isNaN(v) ? null : v;
+}
+
+const fmtTemp = v => v == null ? '—' : `${Math.round(v)}°`;
+
 async function fetchForecast() {
   // Build comma-separated model list for the multi-model API call
   const modelsParam = MODELS.map(m => m.key).join(',');
   const params = new URLSearchParams({
     latitude: LOCATION.lat,
     longitude: LOCATION.lon,
-    hourly: 'wind_speed_10m,wind_direction_10m,wind_gusts_10m',
+    hourly: 'wind_speed_10m,wind_direction_10m,wind_gusts_10m,temperature_2m',
     wind_speed_unit: 'kn',     // knots
     timezone: 'America/Toronto',
     forecast_days: 7,
@@ -962,9 +1016,12 @@ async function fetchForecast() {
       time,
       wind_speed_10m:     pick(h[`wind_speed_10m_${m.key}`]     || h[`wind_speed_10m`]     || []),
       wind_direction_10m: pick(h[`wind_direction_10m_${m.key}`] || h[`wind_direction_10m`] || []),
-      wind_gusts_10m:     pick(h[`wind_gusts_10m_${m.key}`]     || h[`wind_gusts_10m`]     || [])
+      wind_gusts_10m:     pick(h[`wind_gusts_10m_${m.key}`]     || h[`wind_gusts_10m`]     || []),
+      temperature_2m:     pick(h[`temperature_2m_${m.key}`]     || h[`temperature_2m`]     || [])
     };
   }
+  // Fetched separately so a slow marine request never delays the wind forecast
+  pendingWater = fetchWaterTemp(allTime).then(w => w && pick(w));
   return byModel;
 }
 
@@ -1049,6 +1106,20 @@ function renderSummary(hoursOnDay) {
     avgDir = (Math.atan2(sx, sy) * 180 / Math.PI + 360) % 360;
   }
 
+  const airs = hoursOnDay.map(r => airTempAt(r.idx)).filter(v => v != null);
+  const airCell = airs.length ? `
+      <div class="summary-cell">
+        <div class="label">AIR</div>
+        <div class="value temp">${fmtTemp(Math.max(...airs))}<span class="unit">C</span></div>
+        <div class="sub" style="--tone: var(--text-faint);">LOW ${fmtTemp(Math.min(...airs))}</div>
+      </div>` : '';
+  const waters = hoursOnDay.map(r => waterTempAt(r.idx)).filter(v => v != null);
+  const waterCell = waters.length ? `
+      <div class="summary-cell">
+        <div class="label">WATER</div>
+        <div class="value temp">${fmtTemp(waters.reduce((a, b) => a + b, 0) / waters.length)}<span class="unit">C</span></div>
+      </div>` : '';
+
   const peak = max(speeds);
   const peakG = max(gusts);
   const meanSp = avg(speeds);
@@ -1068,6 +1139,8 @@ function renderSummary(hoursOnDay) {
         <div class="value">${compassLabel(avgDir)}</div>
         ${avgDir != null ? `<div class="sub tone-${shoreClass(avgDir).tone}">${shoreClass(avgDir).label}</div>` : ''}
       </div>
+      ${airCell}
+      ${waterCell}
     </div>
   `;
 }
@@ -1093,7 +1166,7 @@ function renderHourly() {
   for (let i = 0; i < sample.time.length; i++) {
     const d = new Date(sample.time[i]);
     if (dayKey(d) !== targetDayKey) continue;
-    const row = { date: d, models: {} };
+    const row = { date: d, idx: i, models: {} };
     for (const m of MODELS) {
       const md = forecastData[m.key];
       const speed = md.wind_speed_10m[i];
@@ -1143,6 +1216,7 @@ function renderHourly() {
         <div class="hour-time">
           <div class="hh">${hh}</div>
           <div class="ampm">${ampm}</div>
+          ${airTempAt(row.idx) != null ? `<div class="temp" title="Air temperature">${fmtTemp(airTempAt(row.idx))}</div>` : ''}
         </div>
         <div class="models-stack">
     `;
@@ -1716,6 +1790,16 @@ function renderMap() {
           <div class="label">FROM</div>
           <div class="value">${compassLabel(cs.dir)}<span class="unit">${Math.round(cs.dir)}°</span></div>
         </div>
+        ${airTempAt(i) != null ? `
+        <div class="summary-cell">
+          <div class="label">AIR</div>
+          <div class="value temp">${fmtTemp(airTempAt(i))}<span class="unit">C</span></div>
+        </div>` : ''}
+        ${waterTempAt(i) != null ? `
+        <div class="summary-cell">
+          <div class="label">WATER</div>
+          <div class="value temp">${fmtTemp(waterTempAt(i))}<span class="unit">C</span></div>
+        </div>` : ''}
       </div>
       <div class="shore-card tone-${sc.tone}">
         <div class="shore-badge">${sc.label}</div>
@@ -1808,6 +1892,10 @@ async function load() {
     setUpdated();
     renderDayTabs();
     renderView();
+    pendingWater.then(w => {
+      waterTemp = w;
+      if (w) renderView(); // add the water readings once they arrive
+    });
   } catch (err) {
     console.error(err);
     setStatus('ERROR', false);
